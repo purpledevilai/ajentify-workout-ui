@@ -7,10 +7,11 @@ import { SetRow, type SetData } from '@/components/set-row';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, CheckCircle, Loader2, Dumbbell, ChevronDown, ChevronUp, Trophy } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Dumbbell, ChevronDown, ChevronUp, Trophy, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { usePageDataStore } from '@/lib/page-data-store';
+import { TrainerSession } from '@/components/trainer-session';
 
 interface ExerciseData {
   exercise_id?: string;
@@ -299,6 +300,17 @@ export default function WorkoutPage() {
             )}
             {allCompleted ? 'Finish Workout!' : `Complete (${progressPct}%)`}
           </Button>
+        </div>
+      )}
+
+      {/* Debrief prompt for completed workouts */}
+      {workout.status === 'completed' && (
+        <div className="px-4 pt-4 pb-8">
+          <TrainerSession
+            prominent
+            conversationType="post_workout"
+            workoutId={workout.workout_id}
+          />
         </div>
       )}
     </div>

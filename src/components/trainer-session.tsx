@@ -24,6 +24,8 @@ import { Mic, MicOff, PhoneOff, Loader2, Maximize2, Minimize2, MessageSquare, X,
 import { cn } from '@/lib/utils';
 import { localDateString } from '@/lib/local-date';
 
+export type ConversationType = 'onboarding' | 'in_workout' | 'post_workout' | 'general';
+
 type ToolHandler = (input: Record<string, any>) => Promise<string> | string;
 
 function buildUserContextPromptArgs() {
@@ -35,6 +37,40 @@ function buildUserContextPromptArgs() {
       `Today's date (ISO): ${localDateString(now)}`,
     ].join('\n'),
   };
+}
+
+export function useConversationType(): { type: ConversationType; workoutId?: string } {
+  const pathname = usePathname();
+  const pageData = usePageDataStore((s) => s.pageData);
+
+  const workoutMatch = pathname.match(/^\/workout\/(.+)$/);
+  if (workoutMatch) {
+    const workoutId = workoutMatch[1];
+    const status = pageData?.status as string | undefined;
+    if (status === 'completed') {
+      return { type: 'post_workout', workoutId };
+    }
+    return { type: 'in_workout', workoutId };
+  }
+
+  const hasWorkouts = pageData?.total_workouts !== undefined
+    ? (pageData.total_workouts as number) > 0
+    : true;
+
+  if (pathname === '/dashboard' && !hasWorkouts) {
+    return { type: 'onboarding' };
+  }
+
+  return { type: 'general' };
+}
+
+function triggerSummarize(contextId: string, conversationType: string) {
+  api.post('/conversations/summarize', {
+    context_id: contextId,
+    conversation_type: conversationType,
+  }).catch((err) => {
+    console.warn('[TrainerSession] summarize failed (non-critical):', err);
+  });
 }
 
 function createVoiceToolHandlers(
@@ -116,9 +152,13 @@ function createVoiceToolHandlers(
 }
 
 function VoiceSession({
+  conversationType,
+  workoutId,
   onSwitchToText,
   onClose,
 }: {
+  conversationType: ConversationType;
+  workoutId?: string;
   onSwitchToText: () => void;
   onClose: () => void;
 }) {
@@ -139,6 +179,7 @@ function VoiceSession({
   const [transcript, setTranscript] = useState('');
   const [agentText, setAgentText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const contextIdRef = useRef<string | null>(null);
 
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
@@ -202,36 +243,29 @@ function VoiceSession({
 
     (async () => {
       try {
-        let contextId = stores.contexts.getState().contextId;
+        stores.contexts.getState().clearCurrentContext();
+        const created = await stores.contexts.getState().createContext({
+          prompt_args: buildUserContextPromptArgs(),
+          conversation_type: conversationType,
+          workout_id: workoutId,
+        } as any);
+        contextIdRef.current = created.context_id;
 
-        if (!contextId) {
-          const created = await stores.contexts.getState().createContext({
-            prompt_args: buildUserContextPromptArgs(),
-          });
-          contextId = created.context_id;
-        }
-
-        try {
-          const token = await stores.contexts.getState().generateAccessToken();
-          await store.getState().initialize(contextId!, token);
-        } catch {
-          stores.contexts.getState().clearCurrentContext();
-          const created = await stores.contexts.getState().createContext({
-            prompt_args: buildUserContextPromptArgs(),
-          });
-          const token = await stores.contexts.getState().generateAccessToken();
-          await store.getState().initialize(created.context_id, token);
-        }
+        const token = await stores.contexts.getState().generateAccessToken();
+        await store.getState().initialize(created.context_id, token);
       } catch (err) {
         console.error('[VoiceSession] setup failed', err);
         setError(err instanceof Error ? err.message : 'Connection failed');
         hasStartedRef.current = false;
       }
     })();
-  }, [isConnected, isConnecting, store, stores]);
+  }, [isConnected, isConnecting, store, stores, conversationType, workoutId]);
 
   function handleDisconnect() {
     store.getState().disconnect();
+    if (contextIdRef.current) {
+      triggerSummarize(contextIdRef.current, conversationType);
+    }
     setLayout('center');
     onClose();
   }
@@ -359,46 +393,48 @@ function VoiceSession({
 }
 
 function TextSession({
+  conversationType,
+  workoutId,
   onSwitchToVoice,
   onClose,
 }: {
+  conversationType: ConversationType;
+  workoutId?: string;
   onSwitchToVoice: () => void;
   onClose: () => void;
 }) {
   const stores = useAjentifyStores();
   const hasInitRef = useRef(false);
+  const contextIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (hasInitRef.current) return;
     hasInitRef.current = true;
 
-    const { contextId } = stores.contexts.getState();
-    if (contextId) {
-      const { status } = stores.currentContext.getState();
-      if (status !== 'connected' && status !== 'connecting') {
-        stores.currentContext
-          .getState()
-          .connect(contextId)
-          .catch(() => {
-            stores.contexts.getState().clearCurrentContext();
-            stores.currentContext
-              .getState()
-              .startNewContext({ prompt_args: buildUserContextPromptArgs() })
-              .catch(console.error);
-          });
-      }
-    } else {
-      stores.currentContext
-        .getState()
-        .startNewContext({
-          prompt_args: buildUserContextPromptArgs(),
-        })
-        .catch(console.error);
+    stores.contexts.getState().clearCurrentContext();
+    stores.currentContext
+      .getState()
+      .startNewContext({
+        prompt_args: buildUserContextPromptArgs(),
+        conversation_type: conversationType,
+        workout_id: workoutId,
+      } as any)
+      .then(() => {
+        contextIdRef.current = stores.contexts.getState().contextId ?? null;
+      })
+      .catch(console.error);
+  }, [stores, conversationType, workoutId]);
+
+  function handleClose() {
+    const ctxId = stores.contexts.getState().contextId ?? contextIdRef.current;
+    if (ctxId) {
+      triggerSummarize(ctxId, conversationType);
     }
-  }, [stores]);
+    onClose();
+  }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog open onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent showCloseButton={false} className="sm:max-w-lg p-0 gap-0 h-[600px] max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
           <h3 className="text-sm font-semibold">AI Trainer</h3>
@@ -406,7 +442,7 @@ function TextSession({
             <Button variant="ghost" size="icon" onClick={onSwitchToVoice} className="size-8" title="Switch to voice">
               <Mic className="size-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="size-8">
+            <Button variant="ghost" size="icon" onClick={handleClose} className="size-8">
               <X className="size-4" />
             </Button>
           </div>
@@ -424,6 +460,8 @@ type SessionMode = 'closed' | 'text' | 'voice';
 interface TrainerSessionProps {
   prominent?: boolean;
   className?: string;
+  conversationType?: ConversationType;
+  workoutId?: string;
 }
 
 function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => void }) {
@@ -431,7 +469,6 @@ function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => vo
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-2">
-      {/* Main FAB */}
       <Button
         size="icon"
         className={cn(
@@ -444,7 +481,6 @@ function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => vo
         {expanded ? <X className="size-6" /> : <Dumbbell className="size-6" />}
       </Button>
 
-      {/* Expanded options */}
       {expanded && (
         <>
           <Button
@@ -470,8 +506,11 @@ function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => vo
   );
 }
 
-export function TrainerSession({ prominent = false, className }: TrainerSessionProps) {
+export function TrainerSession({ prominent = false, className, conversationType: propType, workoutId: propWorkoutId }: TrainerSessionProps) {
   const [mode, setMode] = useState<SessionMode>('closed');
+  const detected = useConversationType();
+  const conversationType = propType ?? detected.type;
+  const workoutId = propWorkoutId ?? detected.workoutId;
 
   function handleClose() {
     setMode('closed');
@@ -489,7 +528,7 @@ export function TrainerSession({ prominent = false, className }: TrainerSessionP
                 onClick={() => setMode('voice')}
               >
                 <Mic className="size-5" />
-                Talk to your AI Trainer
+                {conversationType === 'post_workout' ? 'Tell your Trainer (voice)' : 'Talk to your AI Trainer'}
               </Button>
               <Button
                 size="lg"
@@ -498,7 +537,7 @@ export function TrainerSession({ prominent = false, className }: TrainerSessionP
                 onClick={() => setMode('text')}
               >
                 <MessageSquare className="size-5" />
-                Chat with your AI Trainer
+                {conversationType === 'post_workout' ? 'Tell your Trainer (text)' : 'Chat with your AI Trainer'}
               </Button>
             </div>
           ) : (
@@ -512,6 +551,8 @@ export function TrainerSession({ prominent = false, className }: TrainerSessionP
 
       {mode === 'text' && (
         <TextSession
+          conversationType={conversationType}
+          workoutId={workoutId}
           onSwitchToVoice={() => setMode('voice')}
           onClose={handleClose}
         />
@@ -520,6 +561,8 @@ export function TrainerSession({ prominent = false, className }: TrainerSessionP
       {mode === 'voice' && (
         <AjentifyVoiceProvider>
           <VoiceSession
+            conversationType={conversationType}
+            workoutId={workoutId}
             onSwitchToText={() => setMode('text')}
             onClose={handleClose}
           />
