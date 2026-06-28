@@ -179,6 +179,8 @@ function VoiceSession({
   const [transcript, setTranscript] = useState('');
   const [agentText, setAgentText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [agentReady, setAgentReady] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const contextIdRef = useRef<string | null>(null);
 
   const pathnameRef = useRef(pathname);
@@ -223,6 +225,19 @@ function VoiceSession({
 
   useAgentRoomEvent('speech_detected', useCallback((p: { text: string }) => setTranscript(p.text), []));
   useAgentRoomEvent('ai_sentence', useCallback((p: { sentence: string }) => setAgentText(p.sentence), []));
+
+  useAgentRoomEvent('calibration_status', useCallback((p: { status: string }) => {
+    setCalibrating(p.status === 'started');
+  }, []));
+
+  useAgentRoomEvent('agent_status', useCallback((p: { status: string }) => {
+    if (p.status === 'ready') {
+      setAgentReady(true);
+      setCalibrating(false);
+    } else if (p.status === 'calibrating') {
+      setCalibrating(true);
+    }
+  }, []));
 
   useEffect(() => {
     if (!mediaStream) return;
@@ -280,23 +295,33 @@ function VoiceSession({
 
   const micScale = 1 + (userVolume / 255) * 0.3;
   const agentScale = 1 + (agentVolume / 255) * 0.4;
+  const isWarmingUp = isConnected && !agentReady;
 
   if (layout === 'compact') {
     return (
       <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-full bg-background border shadow-xl px-4 py-3 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300">
         <div
-          className="relative flex size-10 items-center justify-center rounded-full bg-primary/10 transition-transform duration-150 shrink-0"
+          className={cn(
+            'relative flex size-10 items-center justify-center rounded-full transition-all duration-500 shrink-0',
+            isWarmingUp ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-primary/10',
+          )}
           style={{ transform: `scale(${agentScale})` }}
         >
           {isConnecting ? (
             <Loader2 className="size-4 animate-spin text-primary" />
+          ) : isWarmingUp ? (
+            <div className="size-5 rounded-full bg-amber-400/60 animate-pulse" />
           ) : (
             <div className="size-5 rounded-full bg-primary/30" />
           )}
         </div>
-        {agentText && (
+        {isWarmingUp ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+            {calibrating ? 'Calibrating...' : 'Warming up...'}
+          </p>
+        ) : agentText ? (
           <p className="text-xs max-w-[200px] truncate text-muted-foreground italic">{agentText}</p>
-        )}
+        ) : null}
         <div className="flex items-center gap-1.5">
           <Button variant="ghost" size="icon" onClick={onSwitchToText} className="size-8 rounded-full" title="Switch to text">
             <MessageSquare className="size-3.5" />
@@ -337,19 +362,40 @@ function VoiceSession({
         <div className="flex flex-col items-center gap-6 py-4">
           <div className="text-center space-y-1">
             <h3 className="text-lg font-semibold">
-              {error ? 'Connection Error' : isConnecting ? 'Connecting...' : isConnected ? 'AI Trainer' : 'Starting...'}
+              {error
+                ? 'Connection Error'
+                : isConnecting
+                  ? 'Connecting...'
+                  : isWarmingUp
+                    ? (calibrating ? 'Calibrating...' : 'Warming up...')
+                    : isConnected
+                      ? 'AI Trainer'
+                      : 'Starting...'}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {error ?? (isConnected ? "I'm listening" : 'Setting up voice connection')}
+              {error
+                ?? (isWarmingUp
+                  ? 'Hold on, getting ready...'
+                  : isConnected
+                    ? "I'm listening"
+                    : 'Setting up voice connection')}
             </p>
           </div>
           <div
-            className="relative flex size-24 items-center justify-center rounded-full bg-primary/10 transition-transform duration-150"
+            className={cn(
+              'relative flex size-24 items-center justify-center rounded-full transition-all duration-500',
+              isWarmingUp ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-primary/10',
+            )}
             style={{ transform: `scale(${agentScale})` }}
           >
-            <div className="absolute inset-0 rounded-full bg-primary/5 animate-pulse" />
+            <div className={cn(
+              'absolute inset-0 rounded-full animate-pulse transition-colors duration-500',
+              isWarmingUp ? 'bg-amber-200/30 dark:bg-amber-700/20' : 'bg-primary/5',
+            )} />
             {isConnecting ? (
               <Loader2 className="size-8 animate-spin text-primary" />
+            ) : isWarmingUp ? (
+              <div className="size-10 rounded-full bg-amber-400/40 animate-pulse" />
             ) : (
               <div className="size-10 rounded-full bg-primary/20" />
             )}
