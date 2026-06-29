@@ -30,11 +30,19 @@ type ToolHandler = (input: Record<string, any>) => Promise<string> | string;
 
 function buildUserContextPromptArgs() {
   const now = new Date();
+  const upcomingDates: string[] = [];
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+    upcomingDates.push(`${dayName} ${localDateString(d)}`);
+  }
   return {
     user_context: [
       `Current date and time: ${now.toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })}`,
       `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
       `Today's date (ISO): ${localDateString(now)}`,
+      `Upcoming dates (day-of-week to ISO date):\n${upcomingDates.join('\n')}`,
     ].join('\n'),
   };
 }
