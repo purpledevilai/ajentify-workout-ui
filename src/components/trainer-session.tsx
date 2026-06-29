@@ -299,7 +299,7 @@ function VoiceSession({
 
   if (layout === 'compact') {
     return (
-      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-full bg-background border shadow-xl px-4 py-3 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300">
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 flex items-center gap-3 rounded-full bg-background border shadow-xl px-4 py-3 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300">
         <div
           className={cn(
             'relative flex size-10 items-center justify-center rounded-full transition-all duration-500 shrink-0',
@@ -316,18 +316,20 @@ function VoiceSession({
           )}
         </div>
         {isWarmingUp ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex-1 truncate">
             {calibrating ? 'Calibrating...' : 'Warming up...'}
           </p>
         ) : agentText ? (
-          <p className="text-xs max-w-[200px] truncate text-muted-foreground italic">{agentText}</p>
-        ) : null}
-        <div className="flex items-center gap-1.5">
-          <Button variant="ghost" size="icon" onClick={onSwitchToText} className="size-8 rounded-full" title="Switch to text">
-            <MessageSquare className="size-3.5" />
+          <p className="text-xs flex-1 truncate text-muted-foreground italic">{agentText}</p>
+        ) : (
+          <span className="flex-1 sm:hidden" />
+        )}
+        <div className="flex items-center gap-1.5 sm:gap-1.5">
+          <Button variant="ghost" size="icon" onClick={onSwitchToText} className="size-10 sm:size-8 rounded-full" title="Switch to text">
+            <MessageSquare className="size-4 sm:size-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={handleToggleLayout} className="size-8 rounded-full">
-            <Maximize2 className="size-3.5" />
+          <Button variant="ghost" size="icon" onClick={handleToggleLayout} className="size-10 sm:size-8 rounded-full">
+            <Maximize2 className="size-4 sm:size-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -335,20 +337,20 @@ function VoiceSession({
             onClick={handleToggleMute}
             disabled={!isConnected}
             className={cn(
-              'size-8 rounded-full transition-transform duration-150',
+              'size-10 sm:size-8 rounded-full transition-transform duration-150',
               audioMuted && 'bg-destructive/10 text-destructive',
             )}
             style={{ transform: !audioMuted ? `scale(${micScale})` : undefined }}
           >
-            {audioMuted ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+            {audioMuted ? <MicOff className="size-4 sm:size-3.5" /> : <Mic className="size-4 sm:size-3.5" />}
           </Button>
           <Button
             variant="ghost"
             size="icon"
             onClick={handleDisconnect}
-            className="size-8 rounded-full text-destructive hover:bg-destructive/10"
+            className="size-10 sm:size-8 rounded-full text-destructive hover:bg-destructive/10"
           >
-            <PhoneOff className="size-3.5" />
+            <PhoneOff className="size-4 sm:size-3.5" />
           </Button>
         </div>
       </div>
@@ -452,6 +454,7 @@ function TextSession({
   const stores = useAjentifyStores();
   const hasInitRef = useRef(false);
   const contextIdRef = useRef<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     if (hasInitRef.current) return;
@@ -479,6 +482,28 @@ function TextSession({
     onClose();
   }
 
+  if (minimized) {
+    return (
+      <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 flex items-center gap-3 rounded-full bg-background border shadow-xl px-4 py-3 sm:px-4 sm:py-3 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 shrink-0">
+          <MessageSquare className="size-5 text-primary" />
+        </div>
+        <span className="text-sm font-medium flex-1 truncate">AI Trainer</span>
+        <div className="flex items-center gap-1.5 sm:gap-1.5">
+          <Button variant="ghost" size="icon" onClick={onSwitchToVoice} className="size-10 sm:size-8 rounded-full" title="Switch to voice">
+            <Mic className="size-4 sm:size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setMinimized(false)} className="size-10 sm:size-8 rounded-full" title="Expand">
+            <Maximize2 className="size-4 sm:size-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleClose} className="size-10 sm:size-8 rounded-full text-destructive hover:bg-destructive/10" title="Close">
+            <X className="size-4 sm:size-3.5" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent showCloseButton={false} className="sm:max-w-lg p-0 gap-0 h-[600px] max-h-[80vh] flex flex-col">
@@ -487,6 +512,9 @@ function TextSession({
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={onSwitchToVoice} className="size-8" title="Switch to voice">
               <Mic className="size-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setMinimized(true)} className="size-8" title="Minimize">
+              <Minimize2 className="size-4" />
             </Button>
             <Button variant="ghost" size="icon" onClick={handleClose} className="size-8">
               <X className="size-4" />
@@ -514,7 +542,7 @@ function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => vo
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-2">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex flex-col-reverse items-end gap-2">
       <Button
         size="icon"
         className={cn(
