@@ -7,7 +7,7 @@ import { SetRow, type SetData } from '@/components/set-row';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, CheckCircle, Loader2, Dumbbell, ChevronDown, ChevronUp, Trophy, MessageSquare } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Dumbbell, ChevronDown, ChevronUp, Trophy, MessageSquare, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDataRefresh } from '@/lib/data-refresh';
 import { usePageDataStore } from '@/lib/page-data-store';
@@ -24,6 +24,7 @@ interface ExerciseData {
 interface ExerciseBlockData {
   block_id?: string;
   structure_type: 'straight' | 'superset' | 'circuit' | 'drop_set';
+  rounds?: number | null;
   exercises: ExerciseData[];
 }
 
@@ -160,6 +161,199 @@ export default function WorkoutPage() {
 
   let exerciseCounter = 0;
 
+  function isCircuitWithRounds(block: ExerciseBlockData): boolean {
+    const rounds = block.rounds ?? 1;
+    return block.structure_type === 'circuit' && rounds > 1;
+  }
+
+  function getCircuitRoundCount(block: ExerciseBlockData): number {
+    return block.rounds ?? 1;
+  }
+
+  function getCurrentRound(block: ExerciseBlockData): number {
+    const totalRounds = getCircuitRoundCount(block);
+    for (let r = 0; r < totalRounds; r++) {
+      const roundComplete = block.exercises.every((ex) => {
+        const set = ex.sets[r];
+        return set?.completed;
+      });
+      if (!roundComplete) return r;
+    }
+    return totalRounds - 1;
+  }
+
+  function renderExercise(
+    exercise: ExerciseData,
+    blockIdx: number,
+    exerciseIdx: number,
+    exerciseNum: number,
+    setIndices?: number[],
+  ) {
+    const notesKey = `${blockIdx}-${exerciseIdx}`;
+    const notesOpen = expandedNotes.has(notesKey);
+    const setsToRender = setIndices ?? exercise.sets.map((_, i) => i);
+    const exerciseCompleted = setsToRender.every((i) => exercise.sets[i]?.completed);
+
+    return (
+      <div key={`${exercise.exercise_id ?? notesKey}-${setIndices?.[0] ?? 'all'}`} className="space-y-3">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'flex size-10 shrink-0 items-center justify-center rounded-xl font-bold text-lg transition-colors',
+              exerciseCompleted
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                : 'bg-primary/10 text-primary',
+            )}
+          >
+            {exerciseCompleted ? <CheckCircle className="size-5" /> : exerciseNum}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold leading-tight">{exercise.name}</h2>
+            {exercise.equipment && (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {exercise.equipment}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {setsToRender.map((setIdx) => {
+            const set = exercise.sets[setIdx];
+            if (!set) return null;
+            return (
+              <SetRow
+                key={set.set_id ?? setIdx}
+                set={set}
+                index={setIdx}
+                onChange={(changes) => handleSetChange(blockIdx, exerciseIdx, setIdx, changes)}
+              />
+            );
+          })}
+        </div>
+
+        {!setIndices && (
+          <>
+            <button
+              type="button"
+              onClick={() => toggleNotes(notesKey)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              {notesOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              {exercise.notes ? 'View notes' : 'Add notes'}
+            </button>
+
+            {notesOpen && (
+              <Textarea
+                placeholder="Notes for this exercise..."
+                value={exercise.notes ?? ''}
+                onChange={(e) => handleNotesChange(blockIdx, exerciseIdx, e.target.value)}
+                className="resize-none text-base"
+                rows={3}
+              />
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function renderCircuitBlock(block: ExerciseBlockData, blockIdx: number) {
+    const totalRounds = getCircuitRoundCount(block);
+    const currentRound = getCurrentRound(block);
+    const allRoundsComplete = block.exercises.every((ex) =>
+      ex.sets.slice(0, totalRounds).every((s) => s.completed),
+    );
+
+    return (
+      <div key={block.block_id ?? blockIdx} className="space-y-4">
+        {/* Circuit header */}
+        <div className="flex items-center gap-2">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400 px-2 flex items-center gap-1.5">
+            <RotateCcw className="size-3.5" />
+            Circuit &middot; {totalRounds} Rounds
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* Round pills */}
+        <div className="flex gap-2 overflow-x-auto pb-1 px-1">
+          {Array.from({ length: totalRounds }, (_, r) => {
+            const roundComplete = block.exercises.every((ex) => ex.sets[r]?.completed);
+            const isCurrent = r === currentRound && !allRoundsComplete;
+
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById(`circuit-${blockIdx}-round-${r}`);
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-all shrink-0',
+                  roundComplete
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                    : isCurrent
+                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 ring-2 ring-orange-400/50'
+                      : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {roundComplete && <CheckCircle className="size-4" />}
+                Round {r + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Round sections */}
+        {Array.from({ length: totalRounds }, (_, r) => {
+          const roundComplete = block.exercises.every((ex) => ex.sets[r]?.completed);
+          const isCurrent = r === currentRound && !allRoundsComplete;
+
+          return (
+            <div
+              key={r}
+              id={`circuit-${blockIdx}-round-${r}`}
+              className={cn(
+                'rounded-2xl border-2 p-4 space-y-4 transition-colors scroll-mt-32',
+                roundComplete
+                  ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20'
+                  : isCurrent
+                    ? 'border-orange-300 bg-orange-50/30 dark:border-orange-700 dark:bg-orange-950/10'
+                    : 'border-border/50 bg-muted/20',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className={cn(
+                  'text-sm font-bold',
+                  roundComplete
+                    ? 'text-green-700 dark:text-green-400'
+                    : isCurrent
+                      ? 'text-orange-700 dark:text-orange-400'
+                      : 'text-muted-foreground',
+                )}>
+                  Round {r + 1} of {totalRounds}
+                </span>
+                {roundComplete && (
+                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                    <CheckCircle className="size-4" />
+                    <span className="text-xs font-semibold">Complete</span>
+                  </div>
+                )}
+              </div>
+
+              {block.exercises.map((exercise, exerciseIdx) =>
+                renderExercise(exercise, blockIdx, exerciseIdx, exerciseIdx + 1, [r]),
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Sticky header */}
@@ -200,6 +394,10 @@ export default function WorkoutPage() {
       {/* Exercises */}
       <div className="px-4 py-4 space-y-8">
         {workout.exercise_blocks.map((block, blockIdx) => {
+          if (isCircuitWithRounds(block)) {
+            return renderCircuitBlock(block, blockIdx);
+          }
+
           const showBlockLabel = block.structure_type !== 'straight' || block.exercises.length > 1;
           return (
             <div key={block.block_id ?? blockIdx} className="space-y-6">
@@ -215,67 +413,7 @@ export default function WorkoutPage() {
 
               {block.exercises.map((exercise, exerciseIdx) => {
                 exerciseCounter++;
-                const notesKey = `${blockIdx}-${exerciseIdx}`;
-                const notesOpen = expandedNotes.has(notesKey);
-                const exerciseCompleted = exercise.sets.every((s) => s.completed);
-
-                return (
-                  <div key={exercise.exercise_id ?? notesKey} className="space-y-3">
-                    {/* Exercise header */}
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={cn(
-                          'flex size-10 shrink-0 items-center justify-center rounded-xl font-bold text-lg transition-colors',
-                          exerciseCompleted
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
-                            : 'bg-primary/10 text-primary',
-                        )}
-                      >
-                        {exerciseCompleted ? <CheckCircle className="size-5" /> : exerciseCounter}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h2 className="text-xl font-bold leading-tight">{exercise.name}</h2>
-                        {exercise.equipment && (
-                          <p className="text-sm text-muted-foreground mt-0.5">
-                            {exercise.equipment}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Sets */}
-                    <div className="space-y-2">
-                      {exercise.sets.map((set, setIdx) => (
-                        <SetRow
-                          key={set.set_id ?? setIdx}
-                          set={set}
-                          index={setIdx}
-                          onChange={(changes) => handleSetChange(blockIdx, exerciseIdx, setIdx, changes)}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Notes toggle */}
-                    <button
-                      type="button"
-                      onClick={() => toggleNotes(notesKey)}
-                      className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
-                    >
-                      {notesOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                      {exercise.notes ? 'View notes' : 'Add notes'}
-                    </button>
-
-                    {notesOpen && (
-                      <Textarea
-                        placeholder="Notes for this exercise..."
-                        value={exercise.notes ?? ''}
-                        onChange={(e) => handleNotesChange(blockIdx, exerciseIdx, e.target.value)}
-                        className="resize-none text-base"
-                        rows={3}
-                      />
-                    )}
-                  </div>
-                );
+                return renderExercise(exercise, blockIdx, exerciseIdx, exerciseCounter);
               })}
             </div>
           );

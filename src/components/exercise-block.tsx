@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export interface ExerciseBlockData {
   structure_type: 'straight' | 'superset' | 'circuit' | 'drop_set';
+  rounds?: number | null;
   exercises: Array<{
     exercise_id: string;
     name: string;
@@ -30,6 +31,7 @@ const structureLabels: Record<string, { label: string; color: string }> = {
 
 export function ExerciseBlock({ block }: { block: ExerciseBlockData }) {
   const style = structureLabels[block.structure_type] ?? structureLabels.straight;
+  const rounds = block.rounds ?? 1;
 
   return (
     <Card>
@@ -38,6 +40,11 @@ export function ExerciseBlock({ block }: { block: ExerciseBlockData }) {
           <Badge variant="secondary" className={style.color}>
             {style.label}
           </Badge>
+          {block.structure_type === 'circuit' && rounds > 1 && (
+            <Badge variant="outline" className="text-xs">
+              {rounds} rounds
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
