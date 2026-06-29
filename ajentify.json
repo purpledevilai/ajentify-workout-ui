@@ -1,0 +1,71 @@
+{
+  "$schema": "https://api.ajentify.com/docs/manifest-schema.json",
+  "tools": {
+    "get_user_profile": {
+      "name": "get_user_profile",
+      "description": "Get the current user's fitness profile including body stats, goals, injuries, environment, and trainer notes.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/profile.ts#GetUserProfileInput"
+    },
+    "save_user_profile": {
+      "name": "save_user_profile",
+      "description": "Update the user's fitness profile. Use this to save goals, body stats, environment info, injuries, and trainer notes discovered during conversation.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/profile.ts#SaveUserProfileInput"
+    },
+    "create_workout": {
+      "name": "create_workout",
+      "description": "Create a new workout session with exercises, sets, and scheduling. Each workout has exercise blocks that contain exercises with sets.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/workout.ts#CreateWorkoutInput"
+    },
+    "get_workouts": {
+      "name": "get_workouts",
+      "description": "Get the user's workouts within a date range. Defaults to the past 7 days if no range is specified. Use 'date' for an exact single-day filter.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/workout.ts#GetWorkoutsInput"
+    },
+    "update_workout": {
+      "name": "update_workout",
+      "description": "Update an existing workout's exercises, sets, or metadata. Pass the full exercise_blocks array as a replacement.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/workout.ts#UpdateWorkoutInput"
+    },
+    "delete_workout": {
+      "name": "delete_workout",
+      "description": "Permanently delete a workout. Use when the user wants to remove a workout entirely.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/workout.ts#DeleteWorkoutInput"
+    },
+    "submit_feedback": {
+      "name": "submit_feedback",
+      "description": "Submit feedback about the app or training experience. Use when the user shares a suggestion, complaint, bug report, or positive comment about the app.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/feedback.ts#SubmitFeedbackInput"
+    }
+  },
+  "agents": {
+    "personal_trainer": {
+      "name": "Personal Trainer",
+      "description": "AI personal trainer that helps users create workout plans, coaches through sessions, and gathers post-workout feedback.",
+      "prompt_file": "prompts/personal-trainer.md",
+      "is_public": false,
+      "agent_speaks_first": false,
+      "uses_prompt_args": true,
+      "prompt_arg_names": ["user_context", "conversation_context", "conversation_memory"],
+      "model_id": "gpt-4.1",
+      "tools": [
+        "get_page_data",
+        "do_page_action",
+        "navigate",
+        "get_user_profile",
+        "save_user_profile",
+        "create_workout",
+        "get_workouts",
+        "update_workout",
+        "delete_workout",
+        "submit_feedback"
+      ]
+    }
+  }
+}

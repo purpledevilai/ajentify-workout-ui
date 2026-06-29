@@ -103,8 +103,17 @@ function createVoiceToolHandlers(
       return JSON.stringify(result);
     },
     get_workouts: async (input) => {
-      const params = input.date ? `?date=${input.date}` : '';
-      const result = await api.get(`/workouts${params}`);
+      const params = new URLSearchParams();
+      if (input.date) {
+        params.set('date', input.date);
+      } else {
+        const now = new Date();
+        const startDate = input.start_date ?? localDateString(new Date(now.getTime() - 7 * 86400000));
+        const endDate = input.end_date ?? localDateString(now);
+        params.set('start_date', startDate);
+        params.set('end_date', endDate);
+      }
+      const result = await api.get(`/workouts?${params.toString()}`);
       return JSON.stringify(result);
     },
     update_workout: async (input) => {
@@ -113,10 +122,10 @@ function createVoiceToolHandlers(
       onDataMutated();
       return JSON.stringify(result);
     },
-    add_calendar_entries: async (input) => {
-      const result = await api.put(`/calendar/${input.month}`, { entries: input.entries });
+    delete_workout: async (input) => {
+      await api.delete(`/workouts/${input.workout_id}`);
       onDataMutated();
-      return JSON.stringify(result);
+      return JSON.stringify({ success: true, deleted: input.workout_id });
     },
     navigate: (input) => {
       routerPush(input.path);

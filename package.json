@@ -32,6 +32,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@ajentify/cli": "^0.1.0",
     "@jest/globals": "^29.7.0",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4.3.1",
