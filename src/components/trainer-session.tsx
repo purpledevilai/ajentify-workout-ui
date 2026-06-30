@@ -122,6 +122,12 @@ function createVoiceToolHandlers(
       onDataMutated();
       return JSON.stringify(result);
     },
+    patch_workout: async (input) => {
+      const { workout_id, ...body } = input;
+      const result = await api.patch(`/workouts/${workout_id}`, body);
+      onDataMutated();
+      return JSON.stringify(result);
+    },
     delete_workout: async (input) => {
       await api.delete(`/workouts/${input.workout_id}`);
       onDataMutated();

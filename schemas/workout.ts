@@ -59,6 +59,48 @@ export const UpdateWorkoutInput = z.object({
   notes: z.string().nullable().optional().describe("Updated notes"),
 });
 
+export const PatchBlockUpdate = z.object({
+  block_id: z
+    .string()
+    .describe("ID of the exercise block to modify (from get_workouts or get_page_data)"),
+  structure_type: z
+    .enum(["straight", "superset", "circuit", "drop_set"])
+    .optional()
+    .describe("New structure type for this block"),
+  rounds: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe("New round count (for circuits)"),
+  exercises: z
+    .array(ExerciseInput)
+    .optional()
+    .describe(
+      "Replacement exercises for this block. Only the exercises in this block are replaced; other blocks remain untouched."
+    ),
+});
+
+export const PatchWorkoutInput = z.object({
+  workout_id: z.string().describe("ID of the workout to patch"),
+  name: z.string().optional().describe("Updated workout name"),
+  notes: z.string().nullable().optional().describe("Updated notes"),
+  update_blocks: z
+    .array(PatchBlockUpdate)
+    .optional()
+    .describe(
+      "Blocks to update, identified by block_id. Only the specified blocks are modified; all other blocks remain exactly as they are."
+    ),
+  remove_block_ids: z
+    .array(z.string())
+    .optional()
+    .describe("Block IDs to remove entirely from the workout"),
+  add_blocks: z
+    .array(ExerciseBlockInput)
+    .optional()
+    .describe("New exercise blocks to append to the workout"),
+});
+
 export const DeleteWorkoutInput = z.object({
   workout_id: z.string().describe("ID of the workout to delete"),
 });

@@ -31,6 +31,12 @@
       "is_client_side_tool": true,
       "input_schema_file": "schemas/workout.ts#UpdateWorkoutInput"
     },
+    "patch_workout": {
+      "name": "patch_workout",
+      "description": "Surgically update specific parts of a workout without rewriting everything. Target individual blocks by block_id to replace their exercises, add new blocks, or remove blocks. Prefer this over update_workout when only a small part of the workout needs to change.",
+      "is_client_side_tool": true,
+      "input_schema_file": "schemas/workout.ts#PatchWorkoutInput"
+    },
     "delete_workout": {
       "name": "delete_workout",
       "description": "Permanently delete a workout. Use when the user wants to remove a workout entirely.",
@@ -63,6 +69,7 @@
         "create_workout",
         "get_workouts",
         "update_workout",
+        "patch_workout",
         "delete_workout",
         "submit_feedback"
       ]
