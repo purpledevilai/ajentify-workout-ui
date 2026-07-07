@@ -1,6 +1,7 @@
 import { defineClientSideTools } from '@ajentify/chat';
 import { api } from './api';
 import { useDataRefresh } from './data-refresh';
+import { localDateString } from './local-date';
 
 type WorkoutTools = {
   get_user_profile: {
@@ -16,15 +17,19 @@ type WorkoutTools = {
     result: unknown;
   };
   get_workouts: {
-    args: { date?: string };
+    args: { date?: string; start_date?: string; end_date?: string };
     result: unknown;
   };
   update_workout: {
     args: { workout_id: string; [key: string]: unknown };
     result: unknown;
   };
-  add_calendar_entries: {
-    args: { month: string; entries: unknown[] };
+  patch_workout: {
+    args: { workout_id: string; [key: string]: unknown };
+    result: unknown;
+  };
+  delete_workout: {
+    args: { workout_id: string };
     result: unknown;
   };
   navigate: {
@@ -55,8 +60,17 @@ export function createWorkoutTools(routerPush: (path: string) => void) {
       return result;
     },
     get_workouts: async (args) => {
-      const params = args.date ? `?date=${args.date}` : '';
-      return api.get(`/workouts${params}`);
+      const params = new URLSearchParams();
+      if (args.date) {
+        params.set('date', args.date);
+      } else {
+        const now = new Date();
+        const startDate = args.start_date ?? localDateString(new Date(now.getTime() - 7 * 86400000));
+        const endDate = args.end_date ?? localDateString(now);
+        params.set('start_date', startDate);
+        params.set('end_date', endDate);
+      }
+      return api.get(`/workouts?${params.toString()}`);
     },
     update_workout: async (args) => {
       const { workout_id, ...body } = args;
@@ -64,10 +78,16 @@ export function createWorkoutTools(routerPush: (path: string) => void) {
       bump();
       return result;
     },
-    add_calendar_entries: async (args) => {
-      const result = await api.put(`/calendar/${args.month}`, { entries: args.entries });
+    patch_workout: async (args) => {
+      const { workout_id, ...body } = args;
+      const result = await api.patch(`/workouts/${workout_id}`, body);
       bump();
       return result;
+    },
+    delete_workout: async (args) => {
+      await api.delete(`/workouts/${args.workout_id}`);
+      bump();
+      return { success: true, deleted: args.workout_id };
     },
     navigate: async (args) => {
       routerPush(args.path);
