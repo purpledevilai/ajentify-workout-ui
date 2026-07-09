@@ -1,6 +1,8 @@
 import { defineClientSideTools } from '@ajentify/chat';
 import { api } from './api';
 import { useDataRefresh } from './data-refresh';
+import { usePageDataStore } from './page-data-store';
+import { usePageActionStore } from './page-action-store';
 import { localDateString } from './local-date';
 
 type WorkoutTools = {
@@ -38,6 +40,14 @@ type WorkoutTools = {
   };
   submit_feedback: {
     args: { message: string; source?: string };
+    result: unknown;
+  };
+  get_page_data: {
+    args: Record<string, never>;
+    result: unknown;
+  };
+  do_page_action: {
+    args: { action?: string; key?: string; args?: Record<string, unknown>; [key: string]: unknown };
     result: unknown;
   };
 };
@@ -100,6 +110,31 @@ export function createWorkoutTools(routerPush: (path: string) => void) {
         app_version: '1.0.0',
         page: typeof window !== 'undefined' ? window.location.pathname : undefined,
       });
+    },
+    get_page_data: async () => {
+      const { pageName, pageData, actions } = usePageDataStore.getState();
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      return { data: { page: pageName, path, ...pageData }, actions };
+    },
+    do_page_action: async (args) => {
+      const key = args.action ?? args.key;
+      const actionArgs = (args.args ?? args) as Record<string, unknown>;
+
+      if (key === 'refresh_data') {
+        bump();
+        return { ok: true };
+      }
+
+      if (key === 'set_voice_layout') {
+        return { ok: true, note: 'voice layout not applicable in text mode' };
+      }
+
+      if (typeof key === 'string') {
+        const result = await usePageActionStore.getState().execute(key, actionArgs);
+        return result;
+      }
+
+      return { error: 'No action specified' };
     },
   });
 }
