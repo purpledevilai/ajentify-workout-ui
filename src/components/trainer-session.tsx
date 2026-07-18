@@ -7,11 +7,9 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import {
   AjentifyVoiceProvider,
-  useAgentRoom,
-  useAgentRoomStore,
-  useAgentRoomEvent,
-  monitorMicStream,
-  monitorInboundMediaStream,
+  useRealtimeSession,
+  useRealtimeStore,
+  useRealtimeEvent,
 } from '@/lib/voice';
 import type { ClientSideToolCall } from '@ajentify/voice';
 import { useAjentifyStores } from '@ajentify/chat';
@@ -190,20 +188,13 @@ function VoiceSession({
   const bumpData = useDataRefresh((s) => s.bump);
   const layout = useVoiceLayout((s) => s.layout);
   const setLayout = useVoiceLayout((s) => s.setLayout);
-  const store = useAgentRoomStore();
-  const isConnecting = useAgentRoom((s: any) => s.isConnecting);
-  const isConnected = useAgentRoom((s: any) => s.isConnected);
-  const audioMuted = useAgentRoom((s: any) => s.audioMuted);
-  const mediaStream = useAgentRoom((s: any) => s.mediaStream);
-  const agentMediaStream = useAgentRoom((s: any) => s.agentMediaStream);
+  const store = useRealtimeStore();
+  const isConnecting = useRealtimeSession((s) => s.isConnecting);
+  const isConnected = useRealtimeSession((s) => s.isConnected);
+  const isMuted = useRealtimeSession((s) => s.isMuted);
+  const transcript = useRealtimeSession((s) => s.transcript);
 
-  const [userVolume, setUserVolume] = useState(0);
-  const [agentVolume, setAgentVolume] = useState(0);
-  const [transcript, setTranscript] = useState('');
-  const [agentText, setAgentText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [agentReady, setAgentReady] = useState(false);
-  const [calibrating, setCalibrating] = useState(false);
   const contextIdRef = useRef<string | null>(null);
 
   const pathnameRef = useRef(pathname);
@@ -218,7 +209,7 @@ function VoiceSession({
     ),
   );
 
-  useAgentRoomEvent(
+  useRealtimeEvent(
     'on_client_side_tool_calls',
     useCallback(
       async ({ tool_calls }: { tool_calls: ClientSideToolCall[] }) => {
@@ -246,32 +237,6 @@ function VoiceSession({
     ),
   );
 
-  useAgentRoomEvent('speech_detected', useCallback((p: { text: string }) => setTranscript(p.text), []));
-  useAgentRoomEvent('ai_sentence', useCallback((p: { sentence: string }) => setAgentText(p.sentence), []));
-
-  useAgentRoomEvent('calibration_status', useCallback((p: { status: string }) => {
-    setCalibrating(p.status === 'started');
-  }, []));
-
-  useAgentRoomEvent('agent_status', useCallback((p: { status: string }) => {
-    if (p.status === 'ready') {
-      setAgentReady(true);
-      setCalibrating(false);
-    } else if (p.status === 'calibrating') {
-      setCalibrating(true);
-    }
-  }, []));
-
-  useEffect(() => {
-    if (!mediaStream) return;
-    return monitorMicStream(mediaStream, setUserVolume);
-  }, [mediaStream]);
-
-  useEffect(() => {
-    if (!agentMediaStream) return;
-    return monitorInboundMediaStream(agentMediaStream, setAgentVolume);
-  }, [agentMediaStream]);
-
   const hasStartedRef = useRef(false);
   const stores = useAjentifyStores();
 
@@ -286,6 +251,7 @@ function VoiceSession({
           prompt_args: buildUserContextPromptArgs(),
           conversation_type: conversationType,
           workout_id: workoutId,
+          voice_mode: 'realtime',
         } as any);
         contextIdRef.current = created.context_id;
 
@@ -316,34 +282,23 @@ function VoiceSession({
     setLayout(layout === 'center' ? 'compact' : 'center');
   }
 
-  const micScale = 1 + (userVolume / 255) * 0.3;
-  const agentScale = 1 + (agentVolume / 255) * 0.4;
-  const isWarmingUp = isConnected && !agentReady;
-
   if (layout === 'compact') {
     return (
       <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 flex items-center gap-3 rounded-full bg-background border shadow-xl px-4 py-3 transition-all animate-in slide-in-from-bottom-4 fade-in duration-300">
         <div
           className={cn(
             'relative flex size-10 items-center justify-center rounded-full transition-all duration-500 shrink-0',
-            isWarmingUp ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-primary/10',
+            'bg-primary/10',
           )}
-          style={{ transform: `scale(${agentScale})` }}
         >
           {isConnecting ? (
             <Loader2 className="size-4 animate-spin text-primary" />
-          ) : isWarmingUp ? (
-            <div className="size-5 rounded-full bg-amber-400/60 animate-pulse" />
           ) : (
             <div className="size-5 rounded-full bg-primary/30" />
           )}
         </div>
-        {isWarmingUp ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium flex-1 truncate">
-            {calibrating ? 'Calibrating...' : 'Warming up...'}
-          </p>
-        ) : agentText ? (
-          <p className="text-xs flex-1 truncate text-muted-foreground italic">{agentText}</p>
+        {transcript ? (
+          <p className="text-xs flex-1 truncate text-muted-foreground italic">{transcript.slice(-80)}</p>
         ) : (
           <span className="flex-1 sm:hidden" />
         )}
@@ -361,11 +316,10 @@ function VoiceSession({
             disabled={!isConnected}
             className={cn(
               'size-10 sm:size-8 rounded-full transition-transform duration-150',
-              audioMuted && 'bg-destructive/10 text-destructive',
+              isMuted && 'bg-destructive/10 text-destructive',
             )}
-            style={{ transform: !audioMuted ? `scale(${micScale})` : undefined }}
           >
-            {audioMuted ? <MicOff className="size-4 sm:size-3.5" /> : <Mic className="size-4 sm:size-3.5" />}
+            {isMuted ? <MicOff className="size-4 sm:size-3.5" /> : <Mic className="size-4 sm:size-3.5" />}
           </Button>
           <Button
             variant="ghost"
@@ -391,47 +345,31 @@ function VoiceSession({
                 ? 'Connection Error'
                 : isConnecting
                   ? 'Connecting...'
-                  : isWarmingUp
-                    ? (calibrating ? 'Calibrating...' : 'Warming up...')
-                    : isConnected
-                      ? 'AI Trainer'
-                      : 'Starting...'}
+                  : isConnected
+                    ? 'AI Trainer'
+                    : 'Starting...'}
             </h3>
             <p className="text-sm text-muted-foreground">
               {error
-                ?? (isWarmingUp
-                  ? 'Hold on, getting ready...'
-                  : isConnected
-                    ? "I'm listening"
-                    : 'Setting up voice connection')}
+                ?? (isConnected
+                  ? "I'm listening"
+                  : 'Setting up voice connection')}
             </p>
           </div>
           <div
-            className={cn(
-              'relative flex size-24 items-center justify-center rounded-full transition-all duration-500',
-              isWarmingUp ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-primary/10',
-            )}
-            style={{ transform: `scale(${agentScale})` }}
+            className="relative flex size-24 items-center justify-center rounded-full bg-primary/10 transition-all duration-500"
           >
-            <div className={cn(
-              'absolute inset-0 rounded-full animate-pulse transition-colors duration-500',
-              isWarmingUp ? 'bg-amber-200/30 dark:bg-amber-700/20' : 'bg-primary/5',
-            )} />
+            <div className="absolute inset-0 rounded-full animate-pulse bg-primary/5" />
             {isConnecting ? (
               <Loader2 className="size-8 animate-spin text-primary" />
-            ) : isWarmingUp ? (
-              <div className="size-10 rounded-full bg-amber-400/40 animate-pulse" />
             ) : (
               <div className="size-10 rounded-full bg-primary/20" />
             )}
           </div>
-          {agentText && (
-            <p className="text-sm text-center max-w-[280px] text-muted-foreground italic">
-              &ldquo;{agentText}&rdquo;
-            </p>
-          )}
           {transcript && (
-            <p className="text-xs text-center max-w-[280px] text-muted-foreground">You: {transcript}</p>
+            <p className="text-sm text-center max-w-[280px] text-muted-foreground italic">
+              &ldquo;{transcript.slice(-120)}&rdquo;
+            </p>
           )}
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" onClick={onSwitchToText} className="size-12 rounded-full" title="Switch to text">
@@ -447,11 +385,10 @@ function VoiceSession({
               disabled={!isConnected}
               className={cn(
                 'size-12 rounded-full transition-transform duration-150',
-                audioMuted && 'bg-destructive/10 text-destructive border-destructive/20',
+                isMuted && 'bg-destructive/10 text-destructive border-destructive/20',
               )}
-              style={{ transform: !audioMuted ? `scale(${micScale})` : undefined }}
             >
-              {audioMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+              {isMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
             </Button>
             <Button variant="destructive" size="icon" onClick={handleDisconnect} className="size-12 rounded-full">
               <PhoneOff className="size-5" />

@@ -73,6 +73,27 @@
         "delete_workout",
         "submit_feedback"
       ]
+    },
+    "personal_trainer_voice": {
+      "name": "Personal Trainer (Voice)",
+      "description": "Realtime voice variant of the AI personal trainer. Uses OpenAI Realtime API for low-latency speech-to-speech interaction.",
+      "prompt_file": "prompts/personal-trainer.md",
+      "is_public": false,
+      "agent_speaks_first": true,
+      "uses_prompt_args": true,
+      "prompt_arg_names": ["user_context", "conversation_context", "conversation_memory"],
+      "model_id": "gpt-realtime",
+      "realtime_voice": "ash",
+      "tools": [
+        "get_user_profile",
+        "save_user_profile",
+        "create_workout",
+        "get_workouts",
+        "update_workout",
+        "patch_workout",
+        "delete_workout",
+        "submit_feedback"
+      ]
     }
   }
 }

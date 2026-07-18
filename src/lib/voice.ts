@@ -8,6 +8,9 @@ export {
   useAgentRoomStore,
   useAgentRoomEvent,
   useMediaDevices,
+  useRealtimeSession,
+  useRealtimeStore,
+  useRealtimeEvent,
   monitorMicStream,
   monitorInboundMediaStream,
 } from '@ajentify/voice';
