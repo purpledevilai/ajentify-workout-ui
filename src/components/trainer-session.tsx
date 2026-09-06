@@ -18,11 +18,12 @@ import { useDataRefresh } from '@/lib/data-refresh';
 import { usePageDataStore } from '@/lib/page-data-store';
 import { usePageActionStore } from '@/lib/page-action-store';
 import { useVoiceLayout, type VoiceLayout } from '@/lib/voice-layout-store';
+import { useTrainerSession, type ConversationType } from '@/lib/trainer-session-store';
 import { Mic, MicOff, PhoneOff, Loader2, Maximize2, Minimize2, MessageSquare, X, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { localDateString } from '@/lib/local-date';
 
-export type ConversationType = 'onboarding' | 'in_workout' | 'post_workout' | 'general';
+export type { ConversationType };
 
 type ToolHandler = (input: Record<string, any>) => Promise<string> | string;
 
@@ -192,7 +193,8 @@ function VoiceSession({
   const isConnecting = useRealtimeSession((s) => s.isConnecting);
   const isConnected = useRealtimeSession((s) => s.isConnected);
   const isMuted = useRealtimeSession((s) => s.isMuted);
-  const transcript = useRealtimeSession((s) => s.transcript);
+  const lastMessage = useRealtimeSession((s) => s.messages[s.messages.length - 1]);
+  const transcript = lastMessage?.text ?? '';
 
   const [error, setError] = useState<string | null>(null);
   const contextIdRef = useRef<string | null>(null);
@@ -489,8 +491,6 @@ function TextSession({
   );
 }
 
-type SessionMode = 'closed' | 'text' | 'voice';
-
 interface TrainerSessionProps {
   prominent?: boolean;
   className?: string;
@@ -540,68 +540,85 @@ function TrainerFAB({ onText, onVoice }: { onText: () => void; onVoice: () => vo
   );
 }
 
+/**
+ * The buttons that start a session. Safe to mount on any page — the session
+ * itself is rendered by `TrainerSessionHost` in the app layout, so navigating
+ * away from this page does not tear the conversation down.
+ */
 export function TrainerSession({ prominent = false, className, conversationType: propType, workoutId: propWorkoutId }: TrainerSessionProps) {
-  const [mode, setMode] = useState<SessionMode>('closed');
+  const mode = useTrainerSession((s) => s.mode);
+  const open = useTrainerSession((s) => s.open);
   const detected = useConversationType();
   const conversationType = propType ?? detected.type;
   const workoutId = propWorkoutId ?? detected.workoutId;
 
-  function handleClose() {
-    setMode('closed');
+  if (mode !== 'closed') return null;
+
+  const start = (next: 'text' | 'voice') => open(next, { conversationType, workoutId });
+
+  if (!prominent) {
+    return <TrainerFAB onText={() => start('text')} onVoice={() => start('voice')} />;
   }
 
   return (
-    <>
-      {mode === 'closed' && (
-        <>
-          {prominent ? (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                size="lg"
-                className={cn('gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all', className)}
-                onClick={() => setMode('voice')}
-              >
-                <Mic className="size-5" />
-                {conversationType === 'post_workout' ? 'Tell your Trainer (voice)' : 'Talk to your AI Trainer'}
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className={cn('gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all', className)}
-                onClick={() => setMode('text')}
-              >
-                <MessageSquare className="size-5" />
-                {conversationType === 'post_workout' ? 'Tell your Trainer (text)' : 'Chat with your AI Trainer'}
-              </Button>
-            </div>
-          ) : (
-            <TrainerFAB
-              onText={() => setMode('text')}
-              onVoice={() => setMode('voice')}
-            />
-          )}
-        </>
-      )}
+    <div className="flex flex-col sm:flex-row gap-3">
+      <Button
+        size="lg"
+        className={cn('gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all', className)}
+        onClick={() => start('voice')}
+      >
+        <Mic className="size-5" />
+        {conversationType === 'post_workout' ? 'Tell your Trainer (voice)' : 'Talk to your AI Trainer'}
+      </Button>
+      <Button
+        size="lg"
+        variant="outline"
+        className={cn('gap-2 rounded-full px-8 shadow-lg hover:shadow-xl transition-all', className)}
+        onClick={() => start('text')}
+      >
+        <MessageSquare className="size-5" />
+        {conversationType === 'post_workout' ? 'Tell your Trainer (text)' : 'Chat with your AI Trainer'}
+      </Button>
+    </div>
+  );
+}
 
-      {mode === 'text' && (
-        <TextSession
+/**
+ * Renders the active session. Mount this exactly once, in the app layout, so
+ * the voice provider stays mounted across route changes.
+ */
+export function TrainerSessionHost() {
+  const mode = useTrainerSession((s) => s.mode);
+  const storedType = useTrainerSession((s) => s.conversationType);
+  const workoutId = useTrainerSession((s) => s.workoutId);
+  const setMode = useTrainerSession((s) => s.setMode);
+  const close = useTrainerSession((s) => s.close);
+  const detected = useConversationType();
+  const conversationType = storedType ?? detected.type;
+
+  if (mode === 'text') {
+    return (
+      <TextSession
+        conversationType={conversationType}
+        workoutId={workoutId}
+        onSwitchToVoice={() => setMode('voice')}
+        onClose={close}
+      />
+    );
+  }
+
+  if (mode === 'voice') {
+    return (
+      <AjentifyVoiceProvider config={{ mode: 'realtime' }}>
+        <VoiceSession
           conversationType={conversationType}
           workoutId={workoutId}
-          onSwitchToVoice={() => setMode('voice')}
-          onClose={handleClose}
+          onSwitchToText={() => setMode('text')}
+          onClose={close}
         />
-      )}
+      </AjentifyVoiceProvider>
+    );
+  }
 
-      {mode === 'voice' && (
-        <AjentifyVoiceProvider>
-          <VoiceSession
-            conversationType={conversationType}
-            workoutId={workoutId}
-            onSwitchToText={() => setMode('text')}
-            onClose={handleClose}
-          />
-        </AjentifyVoiceProvider>
-      )}
-    </>
-  );
+  return null;
 }

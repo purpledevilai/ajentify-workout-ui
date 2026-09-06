@@ -9,7 +9,7 @@ import { createAjentifyProxyHandler } from '@/lib/ajentify-proxy';
 import { createWorkoutTools } from '@/lib/ajentify-tools';
 import { AjentifyProvider } from '@ajentify/chat';
 import { ChatPanel } from '@ajentify/chat/ui';
-import { TrainerSession } from '@/components/trainer-session';
+import { TrainerSession, TrainerSessionHost } from '@/components/trainer-session';
 import {
   SidebarProvider,
   Sidebar,
@@ -186,6 +186,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </ChatPanel>
         </SidebarInset>
         <TrainerSession />
+        <TrainerSessionHost />
       </SidebarProvider>
     </AjentifyProvider>
   );
