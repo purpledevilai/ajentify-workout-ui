@@ -75,7 +75,7 @@ describe('getGoogleOAuthUrl', () => {
 
     const parsed = new URL(url);
     expect(parsed.searchParams.get('client_id')).toBe(
-      '130533488030-fumf39v9i18u2sp4dpmqfdfrffhv5dtv.apps.googleusercontent.com',
+      '74778326234-db80mlrh18jp57e5dq88puhko31rmup6.apps.googleusercontent.com',
     );
     expect(parsed.searchParams.get('redirect_uri')).toBe('http://localhost:3001/callback');
     expect(parsed.searchParams.get('response_type')).toBe('code');

@@ -1,6 +1,6 @@
 const GOOGLE_CLIENT_ID =
   process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
-  '130533488030-fumf39v9i18u2sp4dpmqfdfrffhv5dtv.apps.googleusercontent.com';
+  '74778326234-db80mlrh18jp57e5dq88puhko31rmup6.apps.googleusercontent.com';
 
 function base64url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
